@@ -64,9 +64,15 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/sql') {
       const sql = await readBody(req)
-      const out = runPsql([DATABASE_URL, '-c', sql])
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ ok: true, out: out.slice(0, 2000) }))
+      const tmp = `/tmp/q-${Date.now()}-${Math.random().toString(16).slice(2)}.sql`
+      fs.writeFileSync(tmp, sql)
+      try {
+        const out = runPsql([DATABASE_URL, '-f', tmp])
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, out: out.slice(0, 2000) }))
+      } finally {
+        try { fs.unlinkSync(tmp) } catch { /* ignore */ }
+      }
       return
     }
 
