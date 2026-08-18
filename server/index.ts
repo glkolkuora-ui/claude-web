@@ -220,11 +220,12 @@ app.post('/api/check-update', async (_req, res) => {
   }
 })
 
-  const publicDir = path.join(__dirname, 'public')
+const publicDir = path.join(__dirname, 'public')
 if (fs.existsSync(publicDir)) {
   app.use(express.static(publicDir))
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next()
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+    if (req.path.startsWith('/api') || req.path.startsWith('/ws') || req.path.startsWith('/auth')) return next()
     res.sendFile(path.join(publicDir, 'index.html'))
   })
 }
