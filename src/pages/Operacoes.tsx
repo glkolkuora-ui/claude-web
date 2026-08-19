@@ -77,6 +77,18 @@ export default function Operacoes() {
 
   async function handleStop() { await window.claudePro.botStop() }
 
+  async function openConfig() {
+    setLoading(true)
+    try {
+      const bRes = await window.claudePro.sdkBalances()
+      if (bRes.ok && bRes.balances) setBalances(bRes.balances)
+      else addLog(t('ops.logError', { error: bRes.error ?? 'Sem saldo da corretora' }))
+    } finally {
+      setLoading(false)
+      setConfigOpen(true)
+    }
+  }
+
   const isRunning = status?.running ?? false
 
   return (
@@ -96,7 +108,7 @@ export default function Operacoes() {
         </div>
         <div className="operacoes-bar-right">
           {!isRunning
-            ? <button className="btn-start" onClick={() => setConfigOpen(true)} disabled={loading}>{t('ops.start')}</button>
+            ? <button className="btn-start" onClick={() => void openConfig()} disabled={loading}>{t('ops.start')}</button>
             : <button className="btn-stop"  onClick={handleStop}>{t('ops.stop')}</button>
           }
         </div>

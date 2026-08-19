@@ -51,6 +51,7 @@ export default function ConfigPanel({ balances, onStart, onClose }: Props) {
     saved.balanceId != null && realBalances.some(b => b.id === saved.balanceId)
 
   const [actives, setActives] = useState<ActiveInfo[]>([])
+  const [activesError, setActivesError] = useState('')
   const [activeId,    setActiveId]    = useState(saved.activeId ?? 0)
   const [balanceId,   setBalanceId]   = useState(
     savedBalanceValid ? saved.balanceId! : (realBalances[0]?.id ?? 0),
@@ -93,8 +94,13 @@ export default function ConfigPanel({ balances, onStart, onClose }: Props) {
     ;(async () => {
       const res = await window.claudePro.sdkActives(instrument)
       if (cancelled) return
-      if (res.ok && res.actives) setActives(res.actives)
-      else setActives([])
+      if (res.ok && res.actives) {
+        setActives(res.actives)
+        setActivesError(res.actives.length ? '' : t('config.noAsset'))
+      } else {
+        setActives([])
+        setActivesError(res.error ?? t('config.noAsset'))
+      }
     })()
     return () => { cancelled = true }
   }, [instrument])
@@ -181,6 +187,7 @@ export default function ConfigPanel({ balances, onStart, onClose }: Props) {
                   instrument={instrument}
                   onChange={setActiveId}
                 />
+                {activesError && <div className="config-warning">{activesError}</div>}
               </div>
               <div className="field-group field-sm">
                 <label>{t('config.type')}</label>

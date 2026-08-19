@@ -14,6 +14,7 @@ function emit(channel: string, payload: any) {
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
+    cache: 'no-store',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
@@ -23,10 +24,12 @@ async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
 
 let ws: WebSocket | null = null
 let wsTimer: ReturnType<typeof setTimeout> | null = null
+let wsTicket = ''
 
 function wsUrl(): string {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${location.host}/ws`
+  const q = wsTicket ? `?ticket=${encodeURIComponent(wsTicket)}` : ''
+  return `${proto}//${location.host}/ws${q}`
 }
 
 function connectWs() {
@@ -43,7 +46,13 @@ function connectWs() {
       if (data?.channel) emit(data.channel, data.payload)
     } catch { /* ignore */ }
   }
-  ws.onclose = () => scheduleWs()
+  ws.onclose = (ev) => {
+    if (ev.code === 4401) {
+      void refreshSession().then(() => scheduleWs())
+      return
+    }
+    scheduleWs()
+  }
   ws.onerror = () => { /* onclose follows */ }
 }
 
@@ -55,7 +64,13 @@ function scheduleWs() {
   }, 2000)
 }
 
-void api('/api/session').then(() => connectWs()).catch(() => scheduleWs())
+async function refreshSession() {
+  const s = await api<{ ok?: boolean; wsTicket?: string }>('/api/session')
+  if (s?.wsTicket) wsTicket = s.wsTicket
+  return s
+}
+
+void refreshSession().then(() => connectWs()).catch(() => scheduleWs())
 
 window.claudePro = {
   appPlatform: 'web',

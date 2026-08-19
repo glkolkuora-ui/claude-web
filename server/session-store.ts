@@ -3,7 +3,7 @@ import { WebSocket } from 'ws'
 import { SdkBridge } from './engine/sdk-bridge'
 import { BotEngine, type BotConfig } from './engine/bot-engine'
 import { setAppLocale } from './engine/locale'
-import { upsertUserByEmail } from './engine/db-ops'
+import { loadBrokerTokens, saveBrokerTokens, upsertUserByEmail } from './engine/db-ops'
 import { setTelemetryUser, trackBalanceUpdate, trackError } from './engine/telemetry'
 
 export interface Session {
@@ -19,9 +19,21 @@ export interface Session {
   brokerLinked: boolean
   clients: Set<WebSocket>
   reconnectTimer: ReturnType<typeof setInterval> | null
+  wsTicket: string
+  restorePromise: Promise<void> | null
 }
 
 const sessions = new Map<string, Session>()
+const tickets = new Map<string, string>()
+
+function bindTokenPersist(session: Session): void {
+  session.sdk.onTokens((tokens) => {
+    if (!session.userId || !tokens.accessToken) return
+    void saveBrokerTokens(session.userId, tokens).catch((err) => {
+      console.warn('[BROKER] falha ao gravar tokens:', err?.message ?? err)
+    })
+  })
+}
 
 function bindBot(session: Session): void {
   const emit = (channel: string, payload: unknown) => {
@@ -82,8 +94,12 @@ export function createSession(): Session {
     brokerLinked: false,
     clients: new Set(),
     reconnectTimer: null,
+    wsTicket: randomBytes(24).toString('hex'),
+    restorePromise: null,
   }
+  tickets.set(session.wsTicket, id)
   bindBot(session)
+  bindTokenPersist(session)
   startReconnectWatch(session)
   sessions.set(id, session)
   return session
@@ -94,6 +110,11 @@ export function getSession(id: string | undefined | null): Session | null {
   const s = sessions.get(id)
   if (s) s.lastSeenAt = Date.now()
   return s ?? null
+}
+
+export function getSessionByTicket(ticket: string | undefined | null): Session | null {
+  if (!ticket) return null
+  return getSession(tickets.get(ticket) ?? null)
 }
 
 export function newSessionIdFallback(): string {
@@ -124,11 +145,66 @@ export function setSessionLocale(session: Session, locale: string): string {
   return setAppLocale(locale)
 }
 
+export async function persistSessionTokens(session: Session): Promise<void> {
+  if (!session.userId) return
+  const tokens = await session.sdk.exportTokens()
+  if (!tokens?.accessToken) return
+  await saveBrokerTokens(session.userId, tokens)
+}
+
+export async function ensureBroker(session: Session): Promise<void> {
+  if (session.sdk.isConnected()) return
+  if (session.restorePromise) return session.restorePromise
+  session.restorePromise = (async () => {
+    try {
+      if (session.email && !session.userId) {
+        await setSessionEmail(session, session.email)
+      }
+      if (await session.sdk.hasTokens()) {
+        await session.sdk.reconnect()
+        session.brokerLinked = true
+        await persistSessionTokens(session)
+        return
+      }
+      if (session.userId && session.email) {
+        const stored = await loadBrokerTokens(session.userId)
+        if (!stored) return
+        session.sdk.setUserEmail(session.email)
+        await session.sdk.restoreFromTokens(stored)
+        await session.sdk.connect()
+        session.brokerLinked = true
+        await persistSessionTokens(session)
+      }
+    } finally {
+      session.restorePromise = null
+    }
+  })()
+  return session.restorePromise
+}
+
 export async function startBot(session: Session, config: BotConfig): Promise<{ ok: boolean; error?: string }> {
   try {
+    console.log('[BOT] start', {
+      activeId: config?.activeId,
+      ticker: config?.activeTicker,
+      balanceId: config?.balanceId,
+      connected: session.sdk.isConnected(),
+    })
+    if (session.email && !session.userId) {
+      await setSessionEmail(session, session.email)
+    }
+    if (!session.sdk.isConnected()) {
+      await ensureBroker(session)
+    }
+    if (!session.sdk.isConnected()) {
+      return { ok: false, error: 'Broker10 desconectada. Entre de novo com a corretora.' }
+    }
+    if (!config?.activeId || !config?.balanceId) {
+      return { ok: false, error: 'Escolha o ativo e a conta antes de iniciar' }
+    }
     const balances = await session.sdk.getBalances()
-    const bal = balances.find((b) => b.id === config.balanceId)
-    if (!bal) return { ok: false, error: 'Saldo não encontrado' }
+    const bal = balances.find((b) => String(b.id) === String(config.balanceId))
+    if (!bal) return { ok: false, error: 'Saldo não encontrado. Reabra o painel e escolha a conta.' }
     session.sdk.subscribeBalanceUpdate(config.balanceId, (amount) => {
       const msg = JSON.stringify({ channel: 'bot:balance', payload: amount })
       for (const ws of session.clients) {
@@ -137,8 +213,10 @@ export async function startBot(session: Session, config: BotConfig): Promise<{ o
       trackBalanceUpdate(amount, bal.currency)
     })
     await session.bot.start(config, bal.amount)
+    console.log('[BOT] started')
     return { ok: true }
   } catch (e: any) {
+    console.error('[BOT] start failed', e?.message ?? e)
     return { ok: false, error: e?.message ?? 'unknown' }
   }
 }

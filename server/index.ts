@@ -9,6 +9,7 @@ import { pingDb } from './engine/db'
 import {
   checkUpdate,
   clearNotifications,
+  deleteBrokerTokens,
   listLessonCatalog,
   listLessonProgress,
   listNotifications,
@@ -20,7 +21,10 @@ import {
   attachClient,
   createSession,
   emitBrokerConnected,
+  ensureBroker,
   getSession,
+  getSessionByTicket,
+  persistSessionTokens,
   setSessionEmail,
   setSessionLocale,
   startBot,
@@ -59,8 +63,15 @@ function publicOrigin(req: express.Request): string {
 
 const app = express()
 app.set('trust proxy', 1)
+app.set('etag', false)
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  next()
+})
 
 function extractOAuthCode(raw: string): string | null {
   const trimmed = String(raw ?? '').trim()
@@ -87,6 +98,11 @@ function requireSession(req: express.Request, res: express.Response): Session | 
     session.email = emailFromCookie
   }
   if (session.email) session.sdk.setUserEmail(session.email)
+  if (session.email && !session.sdk.isConnected()) {
+    void ensureBroker(session).catch((err) => {
+      console.warn('[BROKER] restore em background falhou:', err?.message ?? err)
+    })
+  }
   return session
 }
 
@@ -101,6 +117,7 @@ app.get('/api/session', (req, res) => {
     ok: true,
     connected: session.sdk.isConnected(),
     running: session.bot.isRunning(),
+    wsTicket: session.wsTicket,
   })
 })
 
@@ -140,6 +157,8 @@ app.post('/api/auth/exchange', async (req, res) => {
     await session.sdk.connect()
     session.verifier = null
     session.brokerLinked = true
+    if (session.email && !session.userId) await setSessionEmail(session, session.email)
+    await persistSessionTokens(session)
     emitBrokerConnected(session)
     res.json({ ok: true })
   } catch (e: any) {
@@ -160,6 +179,8 @@ app.get('/auth/callback', async (req, res) => {
     await session.sdk.connect()
     session.verifier = null
     session.brokerLinked = true
+    if (session.email && !session.userId) await setSessionEmail(session, session.email)
+    await persistSessionTokens(session)
     emitBrokerConnected(session)
     const origin = publicOrigin(req)
     res.type('html').send(`<!doctype html>
@@ -195,6 +216,7 @@ app.post('/api/auth/logout', async (req, res) => {
   const session = requireSession(req, res)!
   try {
     await session.bot.stop().catch(() => {})
+    if (session.userId) await deleteBrokerTokens(session.userId).catch(() => {})
     await session.sdk.logout()
     session.brokerLinked = false
     res.json({ ok: true })
@@ -216,6 +238,7 @@ app.post('/api/auth/disconnect', async (req, res) => {
 app.get('/api/sdk/balances', async (req, res) => {
   const session = requireSession(req, res)!
   try {
+    if (!session.sdk.isConnected()) await ensureBroker(session)
     res.json({ ok: true, balances: await session.sdk.getBalances() })
   } catch (e: any) {
     res.json({ ok: false, error: e?.message })
@@ -226,7 +249,10 @@ app.get('/api/sdk/actives', async (req, res) => {
   const session = requireSession(req, res)!
   const instrument = req.query.instrument === 'digital' ? 'digital' : 'binary'
   try {
-    res.json({ ok: true, actives: await session.sdk.getAvailableActives(instrument) })
+    if (!session.sdk.isConnected()) await ensureBroker(session)
+    const actives = await session.sdk.getAvailableActives(instrument)
+    console.log('[ACTIVES]', instrument, actives.length)
+    res.json({ ok: true, actives })
   } catch (e: any) {
     res.json({ ok: false, error: e?.message })
   }
@@ -384,11 +410,15 @@ const server = http.createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws' })
 
 wss.on('connection', (ws, req) => {
+  const rawUrl = String(req.url ?? '')
+  const qs = rawUrl.includes('?') ? new URLSearchParams(rawUrl.slice(rawUrl.indexOf('?') + 1)) : new URLSearchParams()
+  const ticket = String(qs.get('ticket') ?? '')
   const cookie = String(req.headers.cookie ?? '')
   const match = cookie.match(new RegExp(`(?:^|; )${COOKIE}=([^;]+)`))
   const sid = match ? decodeURIComponent(match[1]) : ''
-  const session = getSession(sid)
+  const session = getSessionByTicket(ticket) || getSession(sid)
   if (!session) {
+    console.warn('[WS] sessão ausente — ticket/cookie não batem')
     ws.close(4401, 'no session')
     return
   }

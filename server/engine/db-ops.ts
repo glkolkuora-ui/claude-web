@@ -467,3 +467,59 @@ export async function clearNotifications(userId: string, dismissKeys: string[]) 
   )
   return { ok: true, cleared: (deleted.rowCount ?? 0) + broadcasts.rows.length + dismissKeys.length }
 }
+
+let brokerTokenTableReady = false
+
+export async function ensureBrokerTokenTable(): Promise<void> {
+  if (brokerTokenTableReady) return
+  const db = requirePool()
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.web_broker_tokens (
+      user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+      access_token text NOT NULL,
+      refresh_token text,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `)
+  brokerTokenTableReady = true
+}
+
+export async function saveBrokerTokens(
+  userId: string,
+  tokens: { accessToken: string; refreshToken?: string },
+): Promise<void> {
+  if (!UUID_RE.test(userId) || !tokens.accessToken) return
+  await ensureBrokerTokenTable()
+  const db = requirePool()
+  await db.query(
+    `INSERT INTO public.web_broker_tokens (user_id, access_token, refresh_token, updated_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id) DO UPDATE SET
+       access_token = EXCLUDED.access_token,
+       refresh_token = COALESCE(EXCLUDED.refresh_token, public.web_broker_tokens.refresh_token),
+       updated_at = now()`,
+    [userId, tokens.accessToken, tokens.refreshToken ?? null],
+  )
+}
+
+export async function loadBrokerTokens(
+  userId: string,
+): Promise<{ accessToken: string; refreshToken?: string } | null> {
+  if (!UUID_RE.test(userId)) return null
+  await ensureBrokerTokenTable()
+  const db = requirePool()
+  const res = await db.query<{ access_token: string; refresh_token: string | null }>(
+    `SELECT access_token, refresh_token FROM public.web_broker_tokens WHERE user_id = $1 LIMIT 1`,
+    [userId],
+  )
+  const row = res.rows[0]
+  if (!row?.access_token) return null
+  return { accessToken: row.access_token, refreshToken: row.refresh_token ?? undefined }
+}
+
+export async function deleteBrokerTokens(userId: string): Promise<void> {
+  if (!UUID_RE.test(userId)) return
+  await ensureBrokerTokenTable()
+  const db = requirePool()
+  await db.query(`DELETE FROM public.web_broker_tokens WHERE user_id = $1`, [userId])
+}

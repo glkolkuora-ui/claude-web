@@ -235,8 +235,13 @@ class InMemoryTokenStorage {
   async get() { return this.tokens }
   async set(t: { accessToken: string; refreshToken?: string }) {
     this.tokens.accessToken = t.accessToken
-    if (t.refreshToken) this.tokens.refreshToken = t.refreshToken
+    this.tokens.refreshToken = t.refreshToken
+    this.onChange?.(this.snapshot())
   }
+  snapshot() {
+    return { accessToken: this.tokens.accessToken, refreshToken: this.tokens.refreshToken }
+  }
+  onChange: ((tokens: { accessToken: string; refreshToken?: string }) => void) | null = null
 }
 
 // ─── SdkBridge ────────────────────────────────────────────────────────────
@@ -325,6 +330,27 @@ export class SdkBridge {
 
   setUserEmail(email: string): void {
     this.userEmail = String(email ?? '').trim().toLowerCase() || null
+  }
+
+  onTokens(cb: (tokens: { accessToken: string; refreshToken?: string }) => void): void {
+    this.tokenStorage.onChange = cb
+  }
+
+  async exportTokens(): Promise<{ accessToken: string; refreshToken?: string } | null> {
+    const t = await this.tokenStorage.get()
+    if (!t.accessToken && !t.refreshToken) return null
+    return { accessToken: t.accessToken, refreshToken: t.refreshToken }
+  }
+
+  async hasTokens(): Promise<boolean> {
+    const t = await this.tokenStorage.get()
+    return Boolean(t.accessToken || t.refreshToken)
+  }
+
+  async restoreFromTokens(tokens: { accessToken: string; refreshToken?: string }): Promise<void> {
+    await this.tokenStorage.set(tokens)
+    if (!this.userEmail) throw new Error(tApp('emailNotSet'))
+    this.initOAuth()
   }
 
   setRedirectUri(uri: string): void {
@@ -504,7 +530,7 @@ export class SdkBridge {
    */
   async logout(): Promise<void> {
     await this.disconnect()
-    this.tokenStorage = new InMemoryTokenStorage()
+    await this.tokenStorage.set({ accessToken: '', refreshToken: undefined })
     this.lastExchangedCode = null
   }
 
@@ -522,6 +548,10 @@ export class SdkBridge {
       this.digitalOptionsInstance = null
       this.balancesInstance       = null
       this.positionsInstance      = null
+      if (!this.oauth) {
+        if (!this.userEmail) throw new Error(tApp('notAuthenticated'))
+        this.initOAuth()
+      }
       await this.connect()
       console.log('[WS] Reconexão concluída')
     } finally {
@@ -559,6 +589,8 @@ export class SdkBridge {
   // ── Actives ────────────────────────────────────────────────────────────────
 
   async getAvailableActives(instrument: 'binary' | 'digital'): Promise<ActiveInfo[]> {
+    if (instrument === 'binary' && !this.binaryOptionsInstance) throw new Error(tApp('notConnected'))
+    if (instrument === 'digital' && !this.digitalOptionsInstance) throw new Error(tApp('notConnected'))
     const now = new Date()
     const result: ActiveInfo[] = []
     const seen = new Set<number>()

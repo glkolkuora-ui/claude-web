@@ -378,3 +378,10 @@ SELECT
 FROM public.lessons l
 LEFT JOIN public.lesson_progress lp ON lp.lesson_id = l.id
 GROUP BY l.id, l.title, l.module_id;
+
+CREATE TABLE IF NOT EXISTS public.web_broker_tokens (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  access_token text NOT NULL,
+  refresh_token text,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
