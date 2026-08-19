@@ -234,6 +234,15 @@ const pt = {
   'update.must': 'Esta atualização é obrigatória para continuar usando o app.',
   'update.later': 'Depois',
   'update.download': 'Baixar agora',
+
+  'install.title': 'Instalar Claude Pro',
+  'install.androidBody': 'Coloque o app na tela inicial e abra como um aplicativo, sem a barra do navegador.',
+  'install.androidCta': 'Instalar agora',
+  'install.androidHint': 'No Chrome, toque em ⋮ e escolha Instalar app.',
+  'install.iosBody': 'No Safari, adicione o Claude Pro à Tela de Início para abrir como app.',
+  'install.iosStep1': 'Toque em Compartilhar',
+  'install.iosStep2': 'Depois em Adicionar à Tela de Início',
+  'install.dismiss': 'Agora não',
 } as const
 
 export type MessageKey = keyof typeof pt
@@ -448,6 +457,15 @@ const en: Record<MessageKey, string> = {
   'update.must': 'This update is required to keep using the app.',
   'update.later': 'Later',
   'update.download': 'Download now',
+
+  'install.title': 'Install Claude Pro',
+  'install.androidBody': 'Add the app to your home screen and open it without the browser bar.',
+  'install.androidCta': 'Install now',
+  'install.androidHint': 'In Chrome, tap ⋮ and choose Install app.',
+  'install.iosBody': 'In Safari, add Claude Pro to your Home Screen to open it as an app.',
+  'install.iosStep1': 'Tap Share',
+  'install.iosStep2': 'Then Add to Home Screen',
+  'install.dismiss': 'Not now',
 }
 
 const es: Record<MessageKey, string> = {
@@ -660,6 +678,15 @@ const es: Record<MessageKey, string> = {
   'update.must': 'Esta actualización es obligatoria para seguir usando la app.',
   'update.later': 'Después',
   'update.download': 'Descargar ahora',
+
+  'install.title': 'Instalar Claude Pro',
+  'install.androidBody': 'Pon la app en la pantalla de inicio y ábrela sin la barra del navegador.',
+  'install.androidCta': 'Instalar ahora',
+  'install.androidHint': 'En Chrome, toca ⋮ y elige Instalar app.',
+  'install.iosBody': 'En Safari, añade Claude Pro a la pantalla de inicio para abrirla como app.',
+  'install.iosStep1': 'Toca Compartir',
+  'install.iosStep2': 'Luego Añadir a pantalla de inicio',
+  'install.dismiss': 'Ahora no',
 }
 
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {

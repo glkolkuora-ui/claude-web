@@ -5924,3 +5924,126 @@ select.select-locked {
     padding: 22px 14px 20px;
   }
 }
+
+/* ─── Instalar na tela inicial (PWA) ──────────────────────────────────────── */
+.install-sheet {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .install-sheet {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 0 12px calc(16px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
+  }
+
+  .app-root:has(.members-shell--compact) .install-sheet {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .install-sheet-card {
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    gap: 12px;
+    align-items: start;
+    padding: 14px 14px 14px 12px;
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(7, 15, 43, 0.96) 0%, rgba(2, 8, 24, 0.94) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(99, 167, 214, 0.2),
+      0 16px 36px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .install-sheet-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: #020818;
+  }
+
+  .install-sheet-copy h2 {
+    margin: 0 0 4px;
+    font-family: var(--font-accent);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--white);
+  }
+
+  .install-sheet-copy p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-muted);
+  }
+
+  .install-sheet-hint {
+    margin-top: 8px !important;
+    color: var(--cyan-2) !important;
+  }
+
+  .install-sheet-steps {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .install-sheet-steps li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--cyan-2);
+  }
+
+  .install-sheet-steps svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .install-sheet-cta {
+    margin-top: 10px;
+    min-height: 40px;
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #031;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #29cf87 0%, var(--green) 60%, #06a35a 100%);
+    box-shadow: 0 3px 0 #06623c, 0 6px 14px rgba(0, 0, 0, 0.28);
+  }
+
+  .install-sheet-dismiss {
+    align-self: start;
+    min-height: 36px;
+    padding: 0 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+}

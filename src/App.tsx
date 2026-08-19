@@ -5,6 +5,7 @@ import LoginSupabase from './pages/LoginSupabase'
 import LicenseGate from './pages/LicenseGate'
 import { FEATURE_FLAGS } from './feature-flags'
 import { supabase } from './lib/supabase-client'
+import InstallPrompt from './components/InstallPrompt'
 import './index.css'
 
 interface SupaUser { id: string; email: string }
@@ -43,30 +44,22 @@ export default function App() {
     return () => { cancelled = true }
   }, [])
 
-  // Gate Misespay — primeiro contato. Bloqueia tudo até validar email.
-  if (FEATURE_FLAGS.LICENSE_REQUIRED && !licensedEmail) {
-    return (
-      <div className="app-root">
-        <LicenseGate onAuthorized={setLicensedEmail} />
-      </div>
-    )
-  }
+  const shell = FEATURE_FLAGS.LICENSE_REQUIRED && !licensedEmail
+    ? <LicenseGate onAuthorized={setLicensedEmail} />
+    : FEATURE_FLAGS.LOGIN_REQUIRED && !supaReady
+      ? null
+      : FEATURE_FLAGS.LOGIN_REQUIRED && !supaUser
+        ? <LoginSupabase onLogin={setSupaUser} />
+        : loggedIn
+          ? <MainApp onLogout={() => setLoggedIn(false)} />
+          : <Login onLoggedIn={() => setLoggedIn(true)} />
 
-  // Gate Supabase (inativo enquanto LOGIN_REQUIRED=false)
-  if (FEATURE_FLAGS.LOGIN_REQUIRED) {
-    if (!supaReady) return null
-    if (!supaUser) return (
-      <div className="app-root">
-        <LoginSupabase onLogin={setSupaUser} />
-      </div>
-    )
-  }
+  if (FEATURE_FLAGS.LOGIN_REQUIRED && !supaReady && licensedEmail) return null
 
   return (
     <div className="app-root">
-      {loggedIn
-        ? <MainApp onLogout={() => setLoggedIn(false)} />
-        : <Login onLoggedIn={() => setLoggedIn(true)} />}
+      {shell}
+      <InstallPrompt />
     </div>
   )
 }
