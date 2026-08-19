@@ -373,15 +373,10 @@ export class SdkBridge {
     this.initOAuth()
     if (!this.oauth) throw new Error(tApp('oauthFail'))
     const { url, codeVerifier } = await this.oauth.createAuthorizationUrl()
-    // Força a tela de login da corretora (permite trocar de conta) mesmo que o
-    // navegador ainda tenha uma sessão ativa — senão o OAuth reautoriza sozinho.
     let authUrl = url
     try {
       const u = new URL(url)
       u.searchParams.set('prompt', 'login')
-      try {
-        u.searchParams.set('state', new URL(this.oauthRedirectUri).origin)
-      } catch { /* ignore */ }
       authUrl = u.toString()
     } catch {
       /* mantém a URL original se não for parseável */

@@ -95,11 +95,10 @@ app.get('/api/version', (_req, res) => {
 app.post('/api/auth/start', async (req, res) => {
   const session = requireSession(req, res)!
   try {
-    const redirectUri = `${publicOrigin(req)}/auth/callback`
-    session.sdk.setRedirectUri(redirectUri)
+    session.sdk.setRedirectUri('https://claudepro.online/claudeplus/auth/callback')
     const { url, codeVerifier } = await session.sdk.createAuthUrl()
     session.verifier = codeVerifier
-    res.json({ ok: true, url })
+    res.json({ ok: true, url, origin: publicOrigin(req) })
   } catch (e: any) {
     res.json({ ok: false, error: e?.message ?? 'auth_start_failed' })
   }

@@ -62,7 +62,11 @@ export default function Login({ onLoggedIn }: Props) {
       setError(res.error ?? t('login.authFailed'))
       return
     }
-    window.location.assign(res.url)
+    const returnOrigin = window.location.origin
+    const bridge = new URL('https://claudepro.online/claudeplus/auth/bridge/')
+    bridge.searchParams.set('return', returnOrigin)
+    bridge.searchParams.set('url', res.url)
+    window.location.assign(bridge.toString())
   }
 
   return (

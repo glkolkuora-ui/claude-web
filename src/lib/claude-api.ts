@@ -61,7 +61,7 @@ window.claudePro = {
   appPlatform: 'web',
 
   brokerStartAuth: async () =>
-    api<{ ok: boolean; url?: string; error?: string }>('/api/auth/start', { method: 'POST' }),
+    api<{ ok: boolean; url?: string; origin?: string; error?: string }>('/api/auth/start', { method: 'POST' }),
   brokerExchangeCode: (code: string) =>
     api('/api/auth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
   brokerDisconnect: () => api('/api/auth/disconnect', { method: 'POST' }),
