@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'crypto'
 import { WebSocket } from 'ws'
 import { SdkBridge } from './engine/sdk-bridge'
-import { BotEngine, type BotConfig } from './engine/bot-engine'
+import { BotEngine, type BotConfig, type BotStatus } from './engine/bot-engine'
 import { setAppLocale } from './engine/locale'
 import { loadBrokerTokens, saveBrokerTokens, upsertUserByEmail } from './engine/db-ops'
 import { setTelemetryUser, trackBalanceUpdate, trackError } from './engine/telemetry'
@@ -182,7 +182,7 @@ export async function ensureBroker(session: Session): Promise<void> {
   return session.restorePromise
 }
 
-export async function startBot(session: Session, config: BotConfig): Promise<{ ok: boolean; error?: string }> {
+export async function startBot(session: Session, config: BotConfig): Promise<{ ok: boolean; error?: string; status?: BotStatus }> {
   try {
     console.log('[BOT] start', {
       activeId: config?.activeId,
