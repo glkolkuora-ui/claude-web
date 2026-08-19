@@ -35,7 +35,9 @@ function wsUrl(): string {
 function connectWs() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
   try {
-    ws = new WebSocket(wsUrl())
+    ws = wsTicket
+      ? new WebSocket(wsUrl(), [`cw.${wsTicket}`])
+      : new WebSocket(wsUrl())
   } catch {
     scheduleWs()
     return

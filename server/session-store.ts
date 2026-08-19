@@ -202,6 +202,10 @@ export async function startBot(session: Session, config: BotConfig): Promise<{ o
     if (!config?.activeId || !config?.balanceId) {
       return { ok: false, error: 'Escolha o ativo e a conta antes de iniciar' }
     }
+    if (session.bot.isRunning()) {
+      console.log('[BOT] already running — syncing status')
+      return { ok: true, status: session.bot.getStatus() }
+    }
     const balances = await session.sdk.getBalances()
     const bal = balances.find((b) => String(b.id) === String(config.balanceId))
     if (!bal) return { ok: false, error: 'Saldo não encontrado. Reabra o painel e escolha a conta.' }
@@ -214,7 +218,7 @@ export async function startBot(session: Session, config: BotConfig): Promise<{ o
     })
     await session.bot.start(config, bal.amount)
     console.log('[BOT] started')
-    return { ok: true }
+    return { ok: true, status: session.bot.getStatus() }
   } catch (e: any) {
     console.error('[BOT] start failed', e?.message ?? e)
     return { ok: false, error: e?.message ?? 'unknown' }

@@ -53,6 +53,13 @@ function persistEmail(res: express.Response, email: string) {
   if (EMAIL_RE.test(clean)) res.cookie(EMAIL_COOKIE, clean, sessionCookie())
 }
 
+function persistWsTicket(res: express.Response, ticket: string) {
+  res.cookie('cw_ticket', ticket, {
+    ...sessionCookie(),
+    httpOnly: false,
+  })
+}
+
 function publicOrigin(req: express.Request): string {
   const xfProto = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim()
   const proto = xfProto || req.protocol || 'https'
@@ -98,6 +105,7 @@ function requireSession(req: express.Request, res: express.Response): Session | 
     session.email = emailFromCookie
   }
   if (session.email) session.sdk.setUserEmail(session.email)
+  persistWsTicket(res, session.wsTicket)
   if (session.email && !session.sdk.isConnected()) {
     void ensureBroker(session).catch((err) => {
       console.warn('[BROKER] restore em background falhou:', err?.message ?? err)
@@ -409,14 +417,23 @@ if (fs.existsSync(publicDir)) {
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws' })
 
-wss.on('connection', (ws, req) => {
+function ticketFromUpgrade(req: http.IncomingMessage): string {
+  const proto = String(req.headers['sec-websocket-protocol'] ?? '')
+  const fromProto = proto.split(',').map((s) => s.trim()).find((s) => s.startsWith('cw.'))
+  if (fromProto) return fromProto.slice(3)
   const rawUrl = String(req.url ?? '')
   const qs = rawUrl.includes('?') ? new URLSearchParams(rawUrl.slice(rawUrl.indexOf('?') + 1)) : new URLSearchParams()
-  const ticket = String(qs.get('ticket') ?? '')
+  return String(qs.get('ticket') ?? '')
+}
+
+wss.on('connection', (ws, req) => {
+  const ticket = ticketFromUpgrade(req)
   const cookie = String(req.headers.cookie ?? '')
-  const match = cookie.match(new RegExp(`(?:^|; )${COOKIE}=([^;]+)`))
-  const sid = match ? decodeURIComponent(match[1]) : ''
-  const session = getSessionByTicket(ticket) || getSession(sid)
+  const sidMatch = cookie.match(new RegExp(`(?:^|; )${COOKIE}=([^;]+)`))
+  const ticketMatch = cookie.match(/(?:^|; )cw_ticket=([^;]+)/)
+  const sid = sidMatch ? decodeURIComponent(sidMatch[1]) : ''
+  const cookieTicket = ticketMatch ? decodeURIComponent(ticketMatch[1]) : ''
+  const session = getSessionByTicket(ticket) || getSessionByTicket(cookieTicket) || getSession(sid)
   if (!session) {
     console.warn('[WS] sessão ausente — ticket/cookie não batem')
     ws.close(4401, 'no session')
@@ -427,6 +444,9 @@ wss.on('connection', (ws, req) => {
     channel: 'session:hello',
     payload: { connected: session.sdk.isConnected(), running: session.bot.isRunning() },
   }))
+  if (session.bot.isRunning()) {
+    ws.send(JSON.stringify({ channel: 'bot:started', payload: session.bot.getStatus() }))
+  }
 })
 
 server.listen(PORT, '0.0.0.0', () => {

@@ -45,6 +45,11 @@ export default function Operacoes() {
     init()
 
     const unsubs = [
+      window.claudePro.on('session:hello', (p: { running?: boolean }) => {
+        if (p?.running) {
+          void window.claudePro.botGetStatus().then((s) => { if (s) setStatus(s) })
+        }
+      }),
       window.claudePro.on('bot:status',        s  => setStatus(s)),
       window.claudePro.on('bot:started',        s  => { setStatus(s); addLog(tRef.current('ops.logStarted')) }),
       window.claudePro.on('bot:stopped',        s  => { setStatus(s); setDisplayBalanceId(null); addLog(tRef.current('ops.logStopped')) }),
@@ -65,17 +70,29 @@ export default function Operacoes() {
       window.claudePro.on('bot:balance',       (v: number) => setActiveBalance(v)),
       window.claudePro.on('bot:error',         (e: string) => addLog(tRef.current('ops.logError', { error: e }))),
     ]
-    return () => unsubs.forEach(u => u())
+    const poll = window.setInterval(() => {
+      void window.claudePro.botGetStatus().then((s) => { if (s) setStatus(s) })
+    }, 2000)
+    return () => {
+      unsubs.forEach(u => u())
+      window.clearInterval(poll)
+    }
   }, [addLog])
 
   async function handleStart(config: BotConfig) {
     setConfigOpen(false)
     const res = await window.claudePro.botStart(config)
+    const statusRes = (res as any)?.status ?? await window.claudePro.botGetStatus()
+    if (statusRes) setStatus(statusRes)
     if (!res.ok) addLog(t('ops.logError', { error: res.error ?? '' }))
     else setDisplayBalanceId(config.balanceId)
   }
 
-  async function handleStop() { await window.claudePro.botStop() }
+  async function handleStop() {
+    await window.claudePro.botStop()
+    const s = await window.claudePro.botGetStatus()
+    if (s) setStatus(s)
+  }
 
   async function openConfig() {
     setLoading(true)
