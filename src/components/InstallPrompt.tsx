@@ -93,7 +93,7 @@ export default function InstallPrompt() {
   return (
     <div className="install-sheet" role="dialog" aria-labelledby="install-title">
       <div className="install-sheet-card">
-        <img src="/icons/icon-192.png" alt="" className="install-sheet-icon" width={44} height={44} />
+        <img src="/icons/icon-192.png?v=2" alt="" className="install-sheet-icon" width={44} height={44} />
         <div className="install-sheet-copy">
           <h2 id="install-title">{t('install.title')}</h2>
           <p>{platform === 'ios' ? t('install.iosBody') : t('install.androidBody')}</p>
