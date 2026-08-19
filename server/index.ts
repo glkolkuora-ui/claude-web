@@ -9,7 +9,6 @@ import { pingDb } from './engine/db'
 import {
   checkUpdate,
   clearNotifications,
-  deleteBrokerTokens,
   listLessonCatalog,
   listLessonProgress,
   listNotifications,
@@ -29,6 +28,7 @@ import {
   setSessionLocale,
   startBot,
   stopBot,
+  forgetBroker,
   type Session,
 } from './session-store'
 
@@ -106,7 +106,7 @@ function requireSession(req: express.Request, res: express.Response): Session | 
   }
   if (session.email) session.sdk.setUserEmail(session.email)
   persistWsTicket(res, session.wsTicket)
-  if (session.email && !session.sdk.isConnected()) {
+  if (session.email && !session.sdk.isConnected() && !session.reauthRequired) {
     void ensureBroker(session).catch((err) => {
       console.warn('[BROKER] restore em background falhou:', err?.message ?? err)
     })
@@ -164,6 +164,7 @@ app.post('/api/auth/exchange', async (req, res) => {
     await session.sdk.exchangeCode(code, session.verifier)
     await session.sdk.connect()
     session.verifier = null
+    session.reauthRequired = false
     session.brokerLinked = true
     if (session.email && !session.userId) await setSessionEmail(session, session.email)
     await persistSessionTokens(session)
@@ -186,6 +187,7 @@ app.get('/auth/callback', async (req, res) => {
     await session.sdk.exchangeCode(code, session.verifier)
     await session.sdk.connect()
     session.verifier = null
+    session.reauthRequired = false
     session.brokerLinked = true
     if (session.email && !session.userId) await setSessionEmail(session, session.email)
     await persistSessionTokens(session)
@@ -224,9 +226,7 @@ app.post('/api/auth/logout', async (req, res) => {
   const session = requireSession(req, res)!
   try {
     await session.bot.stop().catch(() => {})
-    if (session.userId) await deleteBrokerTokens(session.userId).catch(() => {})
-    await session.sdk.logout()
-    session.brokerLinked = false
+    await forgetBroker(session)
     res.json({ ok: true })
   } catch (e: any) {
     res.json({ ok: false, error: e?.message ?? 'logout_failed' })

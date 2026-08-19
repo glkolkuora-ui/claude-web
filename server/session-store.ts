@@ -3,7 +3,7 @@ import { WebSocket } from 'ws'
 import { SdkBridge } from './engine/sdk-bridge'
 import { BotEngine, type BotConfig, type BotStatus } from './engine/bot-engine'
 import { setAppLocale } from './engine/locale'
-import { loadBrokerTokens, saveBrokerTokens, upsertUserByEmail } from './engine/db-ops'
+import { loadBrokerTokens, saveBrokerTokens, upsertUserByEmail, deleteBrokerTokens } from './engine/db-ops'
 import { setTelemetryUser, trackBalanceUpdate, trackError } from './engine/telemetry'
 
 export interface Session {
@@ -17,6 +17,7 @@ export interface Session {
   lastSeenAt: number
   verifier: string | null
   brokerLinked: boolean
+  reauthRequired: boolean
   clients: Set<WebSocket>
   reconnectTimer: ReturnType<typeof setInterval> | null
   wsTicket: string
@@ -28,6 +29,7 @@ const tickets = new Map<string, string>()
 
 function bindTokenPersist(session: Session): void {
   session.sdk.onTokens((tokens) => {
+    if (session.reauthRequired) return
     if (!session.userId || !tokens.accessToken) return
     void saveBrokerTokens(session.userId, tokens).catch((err) => {
       console.warn('[BROKER] falha ao gravar tokens:', err?.message ?? err)
@@ -59,7 +61,7 @@ function bindBot(session: Session): void {
 function startReconnectWatch(session: Session): void {
   if (session.reconnectTimer) return
   session.reconnectTimer = setInterval(() => {
-    if (!session.sdk.isConnected() && session.brokerLinked) {
+    if (!session.sdk.isConnected() && session.brokerLinked && !session.reauthRequired) {
       // Só tenta reconectar se já houve login (sdk já teve oauth).
       void session.sdk.reconnect().catch((err: Error) => {
         emitBrokerError(session, err.message)
@@ -92,6 +94,7 @@ export function createSession(): Session {
     lastSeenAt: Date.now(),
     verifier: null,
     brokerLinked: false,
+    reauthRequired: false,
     clients: new Set(),
     reconnectTimer: null,
     wsTicket: randomBytes(24).toString('hex'),
@@ -146,20 +149,23 @@ export function setSessionLocale(session: Session, locale: string): string {
 }
 
 export async function persistSessionTokens(session: Session): Promise<void> {
-  if (!session.userId) return
+  if (session.reauthRequired || !session.userId) return
   const tokens = await session.sdk.exportTokens()
   if (!tokens?.accessToken) return
   await saveBrokerTokens(session.userId, tokens)
 }
 
 export async function ensureBroker(session: Session): Promise<void> {
+  if (session.reauthRequired) return
   if (session.sdk.isConnected()) return
   if (session.restorePromise) return session.restorePromise
   session.restorePromise = (async () => {
     try {
+      if (session.reauthRequired) return
       if (session.email && !session.userId) {
         await setSessionEmail(session, session.email)
       }
+      if (session.reauthRequired) return
       if (await session.sdk.hasTokens()) {
         await session.sdk.reconnect()
         session.brokerLinked = true
@@ -169,6 +175,7 @@ export async function ensureBroker(session: Session): Promise<void> {
       if (session.userId && session.email) {
         const stored = await loadBrokerTokens(session.userId)
         if (!stored) return
+        if (session.reauthRequired) return
         session.sdk.setUserEmail(session.email)
         await session.sdk.restoreFromTokens(stored)
         await session.sdk.connect()
@@ -180,6 +187,23 @@ export async function ensureBroker(session: Session): Promise<void> {
     }
   })()
   return session.restorePromise
+}
+
+export async function forgetBroker(session: Session): Promise<void> {
+  session.reauthRequired = true
+  session.brokerLinked = false
+  if (session.restorePromise) {
+    await session.restorePromise.catch(() => {})
+  }
+  if (session.email && !session.userId) {
+    await setSessionEmail(session, session.email).catch(() => {})
+  }
+  if (session.userId) {
+    await deleteBrokerTokens(session.userId).catch((err) => {
+      console.warn('[BROKER] falha ao apagar tokens:', err?.message ?? err)
+    })
+  }
+  await session.sdk.logout()
 }
 
 export async function startBot(session: Session, config: BotConfig): Promise<{ ok: boolean; error?: string; status?: BotStatus }> {

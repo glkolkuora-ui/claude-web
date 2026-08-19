@@ -130,6 +130,7 @@ export default function MainApp({ onLogout }: Props) {
   /** Sair da conta: logout COMPLETO — para o bot, encerra a sessão e descarta os
    *  tokens, exigindo nova autenticação (email/senha) no próximo login. */
   async function handleLogout() {
+    try { sessionStorage.setItem('cw_need_broker_login', '1') } catch { /* ignore */ }
     try {
       await window.claudePro?.brokerLogout()
     } catch {

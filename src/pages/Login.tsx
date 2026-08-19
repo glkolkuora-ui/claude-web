@@ -32,6 +32,7 @@ export default function Login({ onLoggedIn }: Props) {
     }
 
     const finish = () => {
+      try { sessionStorage.removeItem('cw_need_broker_login') } catch { /* ignore */ }
       setIsConnecting(false)
       onLoggedInRef.current()
     }
@@ -53,11 +54,16 @@ export default function Login({ onLoggedIn }: Props) {
     window.addEventListener('message', onMessage)
     window.addEventListener('storage', onStorage)
 
+    const forceAuth = (() => {
+      try { return sessionStorage.getItem('cw_need_broker_login') === '1' } catch { return false }
+    })()
+
     void window.claudePro.brokerIsConnected().then((res) => {
-      if (res.connected) finish()
+      if (res.connected && !forceAuth) finish()
     })
 
     const poll = window.setInterval(() => {
+      if (forceAuth) return
       void window.claudePro.brokerIsConnected().then((res) => {
         if (res.connected) finish()
       })

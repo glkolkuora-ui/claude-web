@@ -403,6 +403,7 @@ export class SdkBridge {
     try {
       const u = new URL(url)
       u.searchParams.set('prompt', 'login')
+      u.searchParams.set('max_age', '0')
       authUrl = u.toString()
     } catch {
       /* mantém a URL original se não for parseável */
@@ -529,9 +530,20 @@ export class SdkBridge {
    * uma nova autenticação (email/senha) no próximo login — útil p/ trocar de conta.
    */
   async logout(): Promise<void> {
-    await this.disconnect()
-    await this.tokenStorage.set({ accessToken: '', refreshToken: undefined })
+    try { this.wsStateUnsub?.() } catch { /* ignore */ }
+    this.wsStateUnsub = null
+    this.wsState = 'disconnected'
+    if (this.sdk) {
+      try { await this.sdk.shutdown() } catch { /* ignore */ }
+    }
+    this.sdk = null
+    this.binaryOptionsInstance = null
+    this.digitalOptionsInstance = null
+    this.balancesInstance = null
+    this.positionsInstance = null
+    this.oauth = null
     this.lastExchangedCode = null
+    await this.tokenStorage.set({ accessToken: '', refreshToken: undefined })
   }
 
   async reconnect(): Promise<void> {
