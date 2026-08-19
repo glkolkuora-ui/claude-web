@@ -60,8 +60,15 @@ void api('/api/session').then(() => connectWs()).catch(() => scheduleWs())
 window.claudePro = {
   appPlatform: 'web',
 
-  brokerStartAuth: async () =>
-    api<{ ok: boolean; url?: string; origin?: string; error?: string }>('/api/auth/start', { method: 'POST' }),
+  brokerStartAuth: async () => {
+    const email = (() => {
+      try { return localStorage.getItem('claudepro_licensed_email') || '' } catch { return '' }
+    })()
+    return api<{ ok: boolean; url?: string; origin?: string; error?: string }>(
+      '/api/auth/start',
+      { method: 'POST', body: JSON.stringify({ email }) },
+    )
+  },
   brokerExchangeCode: (code: string) =>
     api('/api/auth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
   brokerDisconnect: () => api('/api/auth/disconnect', { method: 'POST' }),

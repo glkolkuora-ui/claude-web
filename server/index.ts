@@ -29,8 +29,25 @@ import {
 } from './session-store'
 
 const COOKIE = 'cw_sid'
+const EMAIL_COOKIE = 'cw_email'
 const PORT = Number(process.env.PORT || 3000)
 const VERSION = process.env.npm_package_version ?? '1.0.0'
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+function sessionCookie() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: '/',
+  }
+}
+
+function persistEmail(res: express.Response, email: string) {
+  const clean = email.trim().toLowerCase()
+  if (EMAIL_RE.test(clean)) res.cookie(EMAIL_COOKIE, clean, sessionCookie())
+}
 
 function publicOrigin(req: express.Request): string {
   const xfProto = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim()
@@ -63,14 +80,13 @@ function requireSession(req: express.Request, res: express.Response): Session | 
   if (!session) {
     session = createSession()
     sid = session.id
-    res.cookie(COOKIE, sid, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
-    })
+    res.cookie(COOKIE, sid, sessionCookie())
   }
+  const emailFromCookie = String(req.cookies?.[EMAIL_COOKIE] ?? '').trim().toLowerCase()
+  if (!session.email && EMAIL_RE.test(emailFromCookie)) {
+    session.email = emailFromCookie
+  }
+  if (session.email) session.sdk.setUserEmail(session.email)
   return session
 }
 
@@ -95,6 +111,15 @@ app.get('/api/version', (_req, res) => {
 app.post('/api/auth/start', async (req, res) => {
   const session = requireSession(req, res)!
   try {
+    const email = String(req.body?.email ?? session.email ?? '').trim().toLowerCase()
+    if (EMAIL_RE.test(email)) {
+      session.email = email
+      session.sdk.setUserEmail(email)
+      persistEmail(res, email)
+    }
+    if (!session.email) {
+      return res.json({ ok: false, error: 'Email do usuário não definido — passe pelo LicenseGate antes do login Broker10' })
+    }
     session.sdk.setRedirectUri('https://claudepro.online/claudeplus/auth/callback')
     const { url, codeVerifier } = await session.sdk.createAuthUrl()
     session.verifier = codeVerifier
@@ -136,7 +161,25 @@ app.get('/auth/callback', async (req, res) => {
     session.verifier = null
     session.brokerLinked = true
     emitBrokerConnected(session)
-    res.redirect('/?auth=ok')
+    const origin = publicOrigin(req)
+    res.type('html').send(`<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Claude Pro</title></head>
+<body style="background:#0d0f14;color:#e2e4ea;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+<p id="msg">Conectado. Fechando esta guia...</p>
+<script>
+  try { localStorage.setItem('cw_broker_auth', JSON.stringify({ ok: true, t: Date.now() })) } catch (e) {}
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ channel: 'broker:connected' }, ${JSON.stringify(origin)})
+      window.opener.focus()
+    }
+  } catch (e) {}
+  window.close()
+  setTimeout(function () {
+    document.getElementById('msg').textContent = 'Pode fechar esta guia e voltar ao Claude Pro.'
+  }, 400)
+</script>
+</body></html>`)
   } catch (e: any) {
     console.error('[auth/callback]', e?.message ?? e)
     res.redirect('/?auth=error')
@@ -217,7 +260,9 @@ app.post('/api/locale', (req, res) => {
 
 app.post('/api/user/email', async (req, res) => {
   const session = requireSession(req, res)!
-  res.json(await setSessionEmail(session, String(req.body?.email ?? '')))
+  const result = await setSessionEmail(session, String(req.body?.email ?? ''))
+  if (session.email) persistEmail(res, session.email)
+  res.json(result)
 })
 
 app.post('/api/license/verify', async (req, res) => {
@@ -234,6 +279,7 @@ app.post('/api/license/verify', async (req, res) => {
       session.email = email.trim().toLowerCase()
       session.userId = result.user_id
       session.sdk.setUserEmail(session.email)
+      persistEmail(res, session.email)
     }
     res.json(result)
   } catch (e: any) {

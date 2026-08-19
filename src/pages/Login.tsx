@@ -31,23 +31,44 @@ export default function Login({ onLoggedIn }: Props) {
       window.history.replaceState({}, '', window.location.pathname)
     }
 
-    const unsubOk = window.claudePro.on('broker:connected', () => {
+    const finish = () => {
       setIsConnecting(false)
       onLoggedInRef.current()
-    })
+    }
+
+    const unsubOk = window.claudePro.on('broker:connected', finish)
     const unsubErr = window.claudePro.on('broker:error', (msg: string) => {
       setIsConnecting(false)
       setError(typeof msg === 'string' ? msg : String(msg))
       setStep('idle')
     })
 
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.origin !== window.location.origin) return
+      if (ev.data?.channel === 'broker:connected') finish()
+    }
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === 'cw_broker_auth' && ev.newValue) finish()
+    }
+    window.addEventListener('message', onMessage)
+    window.addEventListener('storage', onStorage)
+
     void window.claudePro.brokerIsConnected().then((res) => {
-      if (res.connected) onLoggedInRef.current()
+      if (res.connected) finish()
     })
+
+    const poll = window.setInterval(() => {
+      void window.claudePro.brokerIsConnected().then((res) => {
+        if (res.connected) finish()
+      })
+    }, 1500)
 
     return () => {
       unsubOk()
       unsubErr()
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('storage', onStorage)
+      window.clearInterval(poll)
     }
   }, [t])
 
@@ -55,18 +76,47 @@ export default function Login({ onLoggedIn }: Props) {
     setIsConnecting(true)
     setError('')
     setStep('connecting')
-    const res = await window.claudePro.brokerStartAuth()
-    if (!res.ok || !res.url) {
+
+    const tab = window.open('about:blank', 'cw_broker_auth')
+    if (!tab) {
       setIsConnecting(false)
       setStep('idle')
-      setError(res.error ?? t('login.authFailed'))
+      setError(t('login.popupBlocked'))
       return
     }
-    const returnOrigin = window.location.origin
-    const fallback = new URL('https://claudepro.online/claudeplus/auth/callback/')
-    fallback.searchParams.set('web_return', returnOrigin)
-    fallback.searchParams.set('auth_url', res.url)
-    window.location.assign(fallback.toString())
+    try {
+      tab.document.write(
+        '<!doctype html><title>Claude Pro</title><body style="margin:0;background:#0d0f14;color:#9196a8;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh">Abrindo autorização...</body>',
+      )
+      tab.document.close()
+    } catch { /* ignore */ }
+
+    try {
+      const savedEmail = (() => {
+        try { return localStorage.getItem('claudepro_licensed_email') || '' } catch { return '' }
+      })()
+      if (savedEmail) {
+        try { await window.claudePro.setUserEmail(savedEmail) } catch { /* segue */ }
+      }
+      const res = await window.claudePro.brokerStartAuth()
+      if (!res.ok || !res.url) {
+        try { tab.close() } catch { /* ignore */ }
+        setIsConnecting(false)
+        setStep('idle')
+        setError(res.error ?? t('login.authFailed'))
+        return
+      }
+      const fallback = new URL('https://claudepro.online/claudeplus/auth/callback/')
+      fallback.searchParams.set('web_return', window.location.origin)
+      fallback.searchParams.set('auth_url', res.url)
+      tab.location.replace(fallback.toString())
+      try { tab.focus() } catch { /* ignore */ }
+    } catch (err: any) {
+      try { tab.close() } catch { /* ignore */ }
+      setIsConnecting(false)
+      setStep('idle')
+      setError(err?.message ?? t('login.authFailed'))
+    }
   }
 
   return (
