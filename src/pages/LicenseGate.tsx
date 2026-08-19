@@ -11,7 +11,8 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from 'react'
-import { FEATURE_FLAGS, SUPABASE_URL, SUPABASE_ANON_KEY } from '../feature-flags'
+import { FEATURE_FLAGS } from '../feature-flags'
+import { appApi } from '../lib/app-api'
 import { useI18n } from '../i18n/I18nProvider'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 
@@ -82,14 +83,8 @@ export default function LicenseGate({ onAuthorized }: Props) {
     }
 
     if (FEATURE_FLAGS.LICENSE_OPEN_ACCESS) {
-      // Registra no Supabase (license_checks + user_id) mesmo em modo aberto —
-      // necessário para broker-auth-exchange validar a licença.
       try {
-        await fetch(`${SUPABASE_URL}/functions/v1/verify-license`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
-          body: JSON.stringify({ email: normalized, app_version: 'open-access' }),
-        })
+        await appApi('/api/license/verify', { email: normalized, app_version: 'open-access' })
       } catch {
         /* best-effort */
       }
@@ -105,19 +100,10 @@ export default function LicenseGate({ onAuthorized }: Props) {
           ? '1.0.0'
           : 'web'
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-license`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          email: normalized,
-          app_version: appVersion,
-        }),
+      const data = await appApi<{ authorized?: boolean; message?: string }>('/api/license/verify', {
+        email: normalized,
+        app_version: appVersion,
       })
-
-      const data = await res.json().catch(() => ({}))
 
       if (data?.authorized) {
         await authorizeEmail(normalized, onAuthorized)

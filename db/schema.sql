@@ -275,6 +275,25 @@ CREATE INDEX IF NOT EXISTS idx_trades_entered_at ON public.trades (entered_at DE
 CREATE INDEX IF NOT EXISTS idx_trades_result ON public.trades (result);
 CREATE INDEX IF NOT EXISTS idx_trades_strategy ON public.trades (strategy);
 CREATE INDEX IF NOT EXISTS idx_trades_user_id ON public.trades (user_id);
+CREATE TABLE IF NOT EXISTS public.notification_dismissals (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  notification_id uuid,
+  item_key text,
+  dismissed_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT notification_dismissals_target_check CHECK (
+    (notification_id IS NOT NULL AND item_key IS NULL)
+    OR (notification_id IS NULL AND item_key IS NOT NULL)
+  )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_dismissals_user_notif
+  ON public.notification_dismissals (user_id, notification_id)
+  WHERE notification_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_dismissals_user_item
+  ON public.notification_dismissals (user_id, item_key)
+  WHERE item_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_notification_dismissals_user
+  ON public.notification_dismissals (user_id);
+
 CREATE INDEX IF NOT EXISTS idx_notifications_broadcast_id ON public.notifications (broadcast_id) WHERE broadcast_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON public.notifications (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications (user_id);

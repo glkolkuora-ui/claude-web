@@ -3,7 +3,8 @@
 //
 // Arquitetura:
 //   1. Pega o user_id do main (window.claudePro.appGetUserId)
-//   2. Chama Edge `notifications-list` (service_role bypassa RLS)
+//   2. Chama /api/notifications/* no servidor (Postgres Railway)
+
 //   3. Polling de 60s — sem dependência de auth Supabase no renderer
 //   4. markAsRead via Edge `notifications-mark-read`
 //
@@ -13,7 +14,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FEATURE_FLAGS, SUPABASE_URL, SUPABASE_ANON_KEY } from '../feature-flags'
+import { FEATURE_FLAGS } from '../feature-flags'
+import { appApi } from '../lib/app-api'
 import type { UpdateCheckResult } from '../types'
 import { useI18n } from '../i18n/I18nProvider'
 import type { MessageKey } from '../i18n/messages'
@@ -107,16 +109,8 @@ const POLL_MS = 60_000
 const PANEL_W = 360
 const PANEL_MAX_H = 440
 
-async function callEdge(name: string, body: unknown): Promise<any> {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify(body),
-  })
-  return await res.json().catch(() => ({}))
+async function callNotifApi(name: string, body: unknown): Promise<any> {
+  return appApi(`/api/notifications/${name}`, body)
 }
 
 function IconBell() {
@@ -266,7 +260,7 @@ function NotificationBellActive() {
   const fetchNotifications = useCallback(async (uid: string | null) => {
     try {
       const [data, updateRes] = await Promise.all([
-        callEdge('notifications-list', { user_id: uid }),
+        callNotifApi('list', { user_id: uid }),
         FEATURE_FLAGS.UPDATE_CHECK_ENABLED && typeof window.claudePro?.appCheckUpdate === 'function'
           ? window.claudePro.appCheckUpdate().catch(() => null)
           : Promise.resolve(null),
@@ -373,13 +367,13 @@ function NotificationBellActive() {
       setDismissedUpdateVersion(version)
       mergeDismissedLocal(userId, [], [key])
       if (userId) {
-        await callEdge('notifications-mark-read', { user_id: userId, item_key: key }).catch(() => {})
+        await callNotifApi('mark-read', { user_id: userId, item_key: key }).catch(() => {})
       }
       setItems(prev => prev.filter(n => n.id !== id))
       return
     }
     try {
-      await callEdge('notifications-mark-read', {
+      await callNotifApi('mark-read', {
         user_id: userId,
         notification_id: id,
       })
@@ -415,7 +409,7 @@ function NotificationBellActive() {
       mergeDismissedLocal(userId, notificationIds, uniqueKeys)
 
       if (userId) {
-        await callEdge('notifications-clear', {
+        await callNotifApi('clear', {
           user_id: userId,
           dismiss_keys: uniqueKeys,
         })

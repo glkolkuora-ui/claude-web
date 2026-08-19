@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { FEATURE_FLAGS } from './feature-flags'
-import { callEdgeFunction } from './supabase-client'
+import { ingestTelemetry } from './db-ops'
 
 const FLUSH_MS = 5_000
 const MAX_BATCH = 50
@@ -37,12 +37,14 @@ function appendLocal(events: QueuedEvent[]): void {
 
 async function flushRemote(events: QueuedEvent[]): Promise<boolean> {
   if (!currentUserId) return false
-  const res = await callEdgeFunction('telemetry-bridge', { user_id: currentUserId, events })
-  if (!res.ok) {
-    console.warn('[telemetry] flush remoto falhou:', res.error)
+  try {
+    const res = await ingestTelemetry(currentUserId, events)
+    if (res.errors.length) console.warn('[telemetry] flush parcial:', res.errors)
+    return res.processed > 0 || res.errors.length === 0
+  } catch (err: any) {
+    console.warn('[telemetry] flush remoto falhou:', err?.message ?? err)
     return false
   }
-  return true
 }
 
 async function flush(): Promise<void> {

@@ -1,27 +1,6 @@
-// ════════════════════════════════════════════════════════════════════
-// Cliente Supabase para o processo MAIN do Electron.
-// Não usa storage persistente (main não tem localStorage).
-// Quando LOGIN_REQUIRED=true, o JWT do usuário será fornecido pelo
-// renderer via IPC para as chamadas que exigem auth.
-// ════════════════════════════════════════════════════════════════════
-
-import WS from 'ws'
-import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './feature-flags'
 
-// Node 20 has no native WebSocket. supabase-js 2.105+ throws unless we pass
-// `realtime.transport` — assigning globalThis.WebSocket is not enough.
-;(globalThis as unknown as { WebSocket: typeof WS }).WebSocket = WS
-
-export const supabaseMain = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  realtime: { transport: WS as never },
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-})
-
-/** Helper: faz fetch numa Edge Function com JWT opcional. */
+/** Helper: faz fetch numa Edge Function com JWT opcional (OAuth da corretora). */
 export async function callEdgeFunction(
   name: string,
   body: unknown,

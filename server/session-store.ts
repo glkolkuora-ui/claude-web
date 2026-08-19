@@ -3,7 +3,7 @@ import { WebSocket } from 'ws'
 import { SdkBridge } from './engine/sdk-bridge'
 import { BotEngine, type BotConfig } from './engine/bot-engine'
 import { setAppLocale } from './engine/locale'
-import { callEdgeFunction } from './engine/supabase-client'
+import { upsertUserByEmail } from './engine/db-ops'
 import { setTelemetryUser, trackBalanceUpdate, trackError } from './engine/telemetry'
 
 export interface Session {
@@ -111,11 +111,7 @@ export async function setSessionEmail(session: Session, email: string): Promise<
   session.email = clean
   session.sdk.setUserEmail(clean)
   try {
-    const res = await callEdgeFunction('user-upsert', { email: clean })
-    if (!res.ok || !res.data?.user_id) {
-      return { ok: false, error: res.error ?? 'user_upsert_failed' }
-    }
-    session.userId = String(res.data.user_id)
+    session.userId = await upsertUserByEmail(clean)
     setTelemetryUser(session.userId)
     return { ok: true, userId: session.userId }
   } catch (err: any) {

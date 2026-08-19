@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase-client'
+import { appApi } from '../lib/app-api'
 import type { ModuleWithLessons, Lesson, LessonMaterial } from '../types/lessons'
 import { resolveLessonVideoId, youtubeEmbedSrc } from '../lib/youtube'
 import { useI18n } from '../i18n/I18nProvider'
@@ -63,41 +63,28 @@ export default function Aulas() {
   const loadContent = useCallback(async () => {
     setLoading(true)
     try {
-      const { data: mods, error: modsErr } = await supabase
-        .from('modules')
-        .select('*')
-        .eq('is_published', true)
-        .order('order_index', { ascending: true })
+      const catalog = await appApi<{
+        ok?: boolean
+        modules?: any[]
+        lessons?: any[]
+        materials?: any[]
+        error?: string
+      }>('/api/lessons/catalog')
 
-      if (modsErr) {
-        console.error('[AULAS] Erro modules:', modsErr)
+      if (!catalog.ok) {
+        console.error('[AULAS] Erro catalog:', catalog.error)
         setModules([])
         return
       }
 
-      if (!mods?.length) {
+      const mods = catalog.modules ?? []
+      const lessons = catalog.lessons ?? []
+      const materials = catalog.materials ?? []
+
+      if (!mods.length) {
         setModules([])
         setSelectedLesson(null)
         return
-      }
-
-      const { data: lessons, error: lessonsErr } = await supabase
-        .from('lessons')
-        .select('*')
-        .eq('is_published', true)
-        .order('order_index', { ascending: true })
-
-      if (lessonsErr) {
-        console.error('[AULAS] Erro lessons:', lessonsErr)
-      }
-
-      const { data: materials, error: matsErr } = await supabase
-        .from('lesson_materials')
-        .select('*')
-        .order('order_index', { ascending: true })
-
-      if (matsErr) {
-        console.error('[AULAS] Erro materials:', matsErr)
       }
 
       const lessonsByModule = new Map<string, Lesson[]>()
@@ -131,15 +118,9 @@ export default function Aulas() {
   const loadProgress = useCallback(async () => {
     if (!userId) return
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/lesson-progress-list`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ user_id: userId }),
+      const data = await appApi<{ watched_lesson_ids?: string[] }>('/api/lessons/progress/list', {
+        user_id: userId,
       })
-      const data = await res.json().catch(() => ({}))
       setWatchedIds(new Set(data.watched_lesson_ids ?? []))
     } catch (err) {
       console.error('[AULAS] Erro ao carregar progresso:', err)
@@ -166,17 +147,10 @@ export default function Aulas() {
     })
 
     try {
-      await fetch(`${SUPABASE_URL}/functions/v1/lesson-progress-mark`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          lesson_id: lessonId,
-          is_watched: newWatched,
-        }),
+      await appApi('/api/lessons/progress/mark', {
+        user_id: userId,
+        lesson_id: lessonId,
+        is_watched: newWatched,
       })
     } catch (err) {
       console.error('[AULAS] Erro ao marcar:', err)
