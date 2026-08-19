@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Operacoes from './Operacoes'
 import Aulas from './Aulas'
 import Suporte from './Suporte'
@@ -85,9 +85,47 @@ const NAV: { id: Tab; labelKey: 'nav.aulas' | 'nav.operacoes' | 'nav.suporte'; i
   { id: 'suporte', labelKey: 'nav.suporte', icon: IconSuporte },
 ]
 
+function AccountTools({ onLogout }: { onLogout: () => void }) {
+  const { t } = useI18n()
+  return (
+    <>
+      <LanguageSwitcher variant="sidebar" />
+      <div className="sidebar-account">
+        <span className="sidebar-account-label">{t('nav.account')}</span>
+        <div className="sidebar-account-row">
+          <span className="sidebar-account-avatar" aria-hidden>C</span>
+          <span className="sidebar-account-line">Broker10</span>
+        </div>
+      </div>
+      <div className="sidebar-notify-slot">
+        <NotificationBell />
+      </div>
+      <button
+        type="button"
+        className="sidebar-logout-btn"
+        onClick={() => void onLogout()}
+        aria-label={t('nav.logout')}
+      >
+        <IconLogout className="sidebar-logout-icon" />
+      </button>
+    </>
+  )
+}
+
 export default function MainApp({ onLogout }: Props) {
   const { t } = useI18n()
   const [tab, setTab] = useState<Tab>('operacoes')
+  const [compact, setCompact] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 860px)').matches,
+  )
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 860px)')
+    const onChange = () => setCompact(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   /** Sair da conta: logout COMPLETO — para o bot, encerra a sessão e descarta os
    *  tokens, exigindo nova autenticação (email/senha) no próximo login. */
@@ -102,12 +140,23 @@ export default function MainApp({ onLogout }: Props) {
   }
 
   return (
-    <div className="mainapp members-shell">
+    <div className={`mainapp members-shell${compact ? ' members-shell--compact' : ''}`}>
+      {compact && (
+        <header className="members-topbar">
+          <SidebarLogoMark />
+          <div className="members-topbar-actions">
+            <AccountTools onLogout={handleLogout} />
+          </div>
+        </header>
+      )}
+
       <aside className="members-sidebar" aria-label={t('nav.main')}>
         <div className="members-sidebar-pill members-sidebar-pill--floating">
-          <div className="sidebar-zone sidebar-zone--brand">
-            <SidebarLogoMark />
-          </div>
+          {!compact && (
+            <div className="sidebar-zone sidebar-zone--brand">
+              <SidebarLogoMark />
+            </div>
+          )}
 
           <nav className="sidebar-zone sidebar-zone--nav" aria-label={t('nav.sections')}>
             {NAV.map(({ id, labelKey, icon: Icon }) => {
@@ -133,30 +182,14 @@ export default function MainApp({ onLogout }: Props) {
                 </button>
               )
             })}
-            <LanguageSwitcher variant="sidebar" />
           </nav>
 
-          <div className="sidebar-zone sidebar-zone--footer">
-            <div className="sidebar-footer-sep" aria-hidden />
-            <div className="sidebar-account">
-              <span className="sidebar-account-label">{t('nav.account')}</span>
-              <div className="sidebar-account-row">
-                <span className="sidebar-account-avatar" aria-hidden>C</span>
-                <span className="sidebar-account-line">Broker10</span>
-              </div>
+          {!compact && (
+            <div className="sidebar-zone sidebar-zone--footer">
+              <div className="sidebar-footer-sep" aria-hidden />
+              <AccountTools onLogout={handleLogout} />
             </div>
-            <div className="sidebar-notify-slot">
-              <NotificationBell />
-            </div>
-            <button
-              type="button"
-              className="sidebar-logout-btn"
-              onClick={() => void handleLogout()}
-              aria-label={t('nav.logout')}
-            >
-              <IconLogout className="sidebar-logout-icon" />
-            </button>
-          </div>
+          )}
         </div>
       </aside>
 

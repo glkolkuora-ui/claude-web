@@ -240,7 +240,7 @@ function NotificationBellActive() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
-  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 })
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: PANEL_W })
   const anchorRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -296,29 +296,30 @@ function NotificationBellActive() {
     const rect = btn.getBoundingClientRect()
     const gap = 14
     const margin = 12
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const mobile = vw < 860
+    const panelW = mobile ? Math.min(vw - margin * 2, 400) : PANEL_W
 
-    // Abre à direita do sino; se não couber, abre à esquerda.
-    let left = rect.right + gap
-    if (left + PANEL_W > window.innerWidth - margin) {
-      left = rect.left - PANEL_W - gap
+    let left = mobile ? (vw - panelW) / 2 : rect.right + gap
+    if (!mobile && left + panelW > vw - margin) {
+      left = rect.left - panelW - gap
     }
     if (left < margin) left = margin
 
-    // Altura real do painel (varia entre vazio/lista/detalhe). Sem o painel
-    // medido ainda, usa o máximo como estimativa.
     const panelH = Math.min(
       panelRef.current?.offsetHeight || PANEL_MAX_H,
-      window.innerHeight - margin * 2,
+      vh - margin * 2,
     )
 
-    // Alinha o painel verticalmente ao centro do sino (que fica na base da
-    // sidebar), então clampeia pra nunca sair da tela.
-    let top = rect.top + rect.height / 2 - panelH / 2
-    const maxTop = window.innerHeight - panelH - margin
+    let top = mobile
+      ? Math.min(rect.bottom + gap, vh - panelH - margin)
+      : rect.top + rect.height / 2 - panelH / 2
+    const maxTop = vh - panelH - margin
     if (top > maxTop) top = maxTop
     if (top < margin) top = margin
 
-    setPanelPos({ top, left })
+    setPanelPos({ top, left, width: panelW })
   }, [])
 
   useLayoutEffect(() => {
@@ -441,10 +442,10 @@ function NotificationBellActive() {
   const panel = open ? (
     <div
       ref={panelRef}
-      className="notif-panel"
+      className={`notif-panel${panelPos.width < PANEL_W ? ' notif-panel--sheet' : ''}`}
       role="dialog"
       aria-label={t('notif.title')}
-      style={{ top: panelPos.top, left: panelPos.left, width: PANEL_W }}
+      style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
     >
       <div className="notif-panel-head">
         {selected ? (

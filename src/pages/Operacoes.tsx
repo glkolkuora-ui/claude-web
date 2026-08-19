@@ -17,6 +17,7 @@ export default function Operacoes() {
   const [logs,     setLogs]     = useState<string[]>([])
   const [loading,  setLoading]  = useState(true)
   const [configOpen, setConfigOpen] = useState(false)
+  const [opsPane, setOpsPane] = useState<'chart' | 'panel'>('chart')
   const [activeBalance, setActiveBalance] = useState(0)
   const [displayBalanceId, setDisplayBalanceId] = useState<number | null>(null)
 
@@ -101,8 +102,29 @@ export default function Operacoes() {
         </div>
       </div>
 
+      <div className="operacoes-mobile-tabs" role="tablist" aria-label={t('ops.panes')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={opsPane === 'chart'}
+          className={opsPane === 'chart' ? 'active' : ''}
+          onClick={() => setOpsPane('chart')}
+        >
+          {t('ops.paneChart')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={opsPane === 'panel'}
+          className={opsPane === 'panel' ? 'active' : ''}
+          onClick={() => setOpsPane('panel')}
+        >
+          {t('ops.panePanel')}
+        </button>
+      </div>
+
       {/* Layout principal */}
-      <div className="operacoes-body">
+      <div className={`operacoes-body operacoes-body--${opsPane}`}>
         <div className="operacoes-left">
           <LiveChart activeId={status?.activeId} activeTicker={status?.activeTicker} />
           <LogConsole logs={logs} />

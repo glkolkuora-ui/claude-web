@@ -29,6 +29,17 @@ export default function LanguageSwitcher({ variant = 'sidebar' }: Props) {
   useLayoutEffect(() => {
     if (!open || variant !== 'sidebar' || !btnRef.current) return
     const rect = btnRef.current.getBoundingClientRect()
+    if (window.innerWidth < 860) {
+      const menuW = 176
+      let left = rect.right - menuW
+      if (left < 12) left = 12
+      if (left + menuW > window.innerWidth - 12) left = window.innerWidth - menuW - 12
+      let top = rect.bottom + 8
+      if (top + 140 > window.innerHeight - 12) top = rect.top - 148
+      if (top < 12) top = 12
+      setMenuPos({ top, left })
+      return
+    }
     const menuW = 176
     let left = rect.right + 12
     if (left + menuW > window.innerWidth - 12) left = rect.left - menuW - 12
