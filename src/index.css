@@ -5713,32 +5713,91 @@ select.select-locked {
 
 @media (max-width: 640px) {
   .operacoes-mobile-tabs {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    position: relative;
     flex-shrink: 0;
-    gap: 6px;
-    padding: 8px 12px 6px;
-    background: rgba(5, 13, 46, 0.78);
-    border-bottom: 1px solid var(--sp-border);
+    margin: 8px 12px 6px;
+    padding: 4px;
+    isolation: isolate;
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(7, 15, 43, 0.92) 0%, rgba(2, 8, 24, 0.88) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(99, 167, 214, 0.18),
+      0 10px 24px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .operacoes-mobile-tabs::before {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    top: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    height: calc(100% - 8px);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(90, 168, 230, 0.42) 0%, rgba(23, 82, 143, 0.72) 100%);
+    box-shadow:
+      0 8px 18px rgba(39, 106, 168, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    transform: translateX(0);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .operacoes-mobile-tabs[data-pane='panel']::before {
+    transform: translateX(calc(100% + 4px));
   }
 
   .operacoes-mobile-tabs button {
-    flex: 1;
-    min-height: 40px;
-    border: 1px solid var(--sp-border);
-    background: rgba(255, 255, 255, 0.04);
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    border: none;
+    background: transparent;
     color: var(--text-muted);
-    border-radius: 100px;
-    font-family: var(--font-ui);
+    border-radius: 12px;
+    font-family: var(--font-accent);
     font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     cursor: pointer;
+    transition: color 0.2s ease;
+  }
+
+  .operacoes-mobile-tabs button svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
   }
 
   .operacoes-mobile-tabs button.active {
     color: var(--white);
-    background: rgba(23, 82, 143, 0.28);
-    border-color: rgba(99, 167, 214, 0.4);
+  }
+
+  .operacoes-mobile-tabs button.active svg {
+    opacity: 1;
+  }
+
+  .operacoes-mobile-tabs button:focus-visible {
+    outline: 2px solid var(--cyan-2);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .operacoes-mobile-tabs::before {
+      transition: none;
+    }
   }
 
   .operacoes-body {

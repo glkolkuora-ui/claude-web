@@ -131,7 +131,7 @@ export default function Operacoes() {
         </div>
       </div>
 
-      <div className="operacoes-mobile-tabs" role="tablist" aria-label={t('ops.panes')}>
+      <div className="operacoes-mobile-tabs" role="tablist" aria-label={t('ops.panes')} data-pane={opsPane}>
         <button
           type="button"
           role="tab"
@@ -139,6 +139,9 @@ export default function Operacoes() {
           className={opsPane === 'chart' ? 'active' : ''}
           onClick={() => setOpsPane('chart')}
         >
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path d="M2 12V8h2v4H2zm5 0V4h2v8H7zm5 0V6h2v6h-2z" fill="currentColor" />
+          </svg>
           {t('ops.paneChart')}
         </button>
         <button
@@ -148,6 +151,9 @@ export default function Operacoes() {
           className={opsPane === 'panel' ? 'active' : ''}
           onClick={() => setOpsPane('panel')}
         >
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z" fill="currentColor" />
+          </svg>
           {t('ops.panePanel')}
         </button>
       </div>
