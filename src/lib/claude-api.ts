@@ -60,11 +60,8 @@ void api('/api/session').then(() => connectWs()).catch(() => scheduleWs())
 window.claudePro = {
   appPlatform: 'web',
 
-  brokerStartAuth: async () => {
-    const res = await api<{ ok: boolean; url?: string; error?: string }>('/api/auth/start', { method: 'POST' })
-    if (res.ok && res.url) window.open(res.url, '_blank', 'noopener,noreferrer')
-    return res
-  },
+  brokerStartAuth: async () =>
+    api<{ ok: boolean; url?: string; error?: string }>('/api/auth/start', { method: 'POST' }),
   brokerExchangeCode: (code: string) =>
     api('/api/auth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
   brokerDisconnect: () => api('/api/auth/disconnect', { method: 'POST' }),

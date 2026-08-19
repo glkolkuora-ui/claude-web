@@ -32,6 +32,14 @@ const COOKIE = 'cw_sid'
 const PORT = Number(process.env.PORT || 3000)
 const VERSION = process.env.npm_package_version ?? '1.0.0'
 
+function publicOrigin(req: express.Request): string {
+  const xfProto = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim()
+  const proto = xfProto || req.protocol || 'https'
+  const xfHost = String(req.headers['x-forwarded-host'] ?? '').split(',')[0].trim()
+  const host = xfHost || req.get('host') || 'localhost'
+  return `${proto}://${host}`
+}
+
 const app = express()
 app.set('trust proxy', 1)
 app.use(express.json({ limit: '1mb' }))
@@ -87,6 +95,8 @@ app.get('/api/version', (_req, res) => {
 app.post('/api/auth/start', async (req, res) => {
   const session = requireSession(req, res)!
   try {
+    const redirectUri = `${publicOrigin(req)}/auth/callback`
+    session.sdk.setRedirectUri(redirectUri)
     const { url, codeVerifier } = await session.sdk.createAuthUrl()
     session.verifier = codeVerifier
     res.json({ ok: true, url })
@@ -116,6 +126,9 @@ app.post('/api/auth/exchange', async (req, res) => {
 app.get('/auth/callback', async (req, res) => {
   const session = requireSession(req, res)!
   try {
+    if (req.query.error) {
+      return res.redirect(`/?auth=denied`)
+    }
     const code = extractOAuthCode(String(req.query.code ?? req.query.raw ?? ''))
     if (!code) return res.redirect('/?auth=missing_code')
     if (!session.verifier) return res.redirect('/?auth=no_verifier')
@@ -124,8 +137,9 @@ app.get('/auth/callback', async (req, res) => {
     session.verifier = null
     session.brokerLinked = true
     emitBrokerConnected(session)
-    res.redirect('/')
+    res.redirect('/?auth=ok')
   } catch (e: any) {
+    console.error('[auth/callback]', e?.message ?? e)
     res.redirect('/?auth=error')
   }
 })

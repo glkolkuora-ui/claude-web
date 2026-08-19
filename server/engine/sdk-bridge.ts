@@ -22,6 +22,7 @@ import {
 import { tApp } from './locale'
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`
+const BROKER_TOKEN_PATH = '/auth/oauth.v5/token'
 
 /**
  * Placeholder só para o guard interno do SDK em authenticateWsApiClient
@@ -31,8 +32,11 @@ const EDGE_OAUTH_SDK_SECRET_GUARD = '__edge_delegated__'
 
 function formatEdgeAuthError(
   fallback: string,
-  payload: { error?: string; detail?: unknown },
+  payload: { error?: string; detail?: unknown; error_description?: string },
 ): string {
+  if (typeof payload.error_description === 'string' && payload.error_description.trim()) {
+    return payload.error_description
+  }
   const detail = payload.detail
   if (detail && typeof detail === 'object' && detail !== null) {
     const d = detail as Record<string, unknown>
@@ -92,18 +96,20 @@ class EdgeOAuthMethod extends OAuthMethod {
     expiresIn: number
     refreshToken?: string
   }> {
-    const res = await fetch(`${EDGE_BASE}/broker-auth-exchange`, {
+    const tokenUrl = `${BROKER_CONFIG.apiUrl.replace(/\/+$/, '')}${BROKER_TOKEN_PATH}`
+    const res = await fetch(tokenUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
+        grant_type: 'authorization_code',
         code,
-        code_verifier: codeVerifier,
         redirect_uri: this.edgeRedirectUri,
-        email: this.edgeUserEmail,
+        client_id: BROKER_CONFIG.clientId,
+        code_verifier: codeVerifier,
       }),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as { error?: string; detail?: unknown }
+      const err = await res.json().catch(() => ({})) as { error?: string; detail?: unknown; error_description?: string }
       throw new Error(formatEdgeAuthError(`broker-auth-exchange falhou (${res.status})`, err))
     }
     const data = await res.json() as {
@@ -240,6 +246,7 @@ export class SdkBridge {
   private oauth: OAuthMethod | null = null
   private tokenStorage = new InMemoryTokenStorage()
   private userEmail: string | null = null
+  private oauthRedirectUri = BROKER_CONFIG.redirectUri
   private wsState: 'connected' | 'disconnected' = 'disconnected'
   private wsStateUnsub: (() => void) | null = null
   private reconnecting = false
@@ -320,6 +327,15 @@ export class SdkBridge {
     this.userEmail = String(email ?? '').trim().toLowerCase() || null
   }
 
+  setRedirectUri(uri: string): void {
+    const clean = String(uri ?? '').trim()
+    if (clean.startsWith('http')) this.oauthRedirectUri = clean
+  }
+
+  getRedirectUri(): string {
+    return this.oauthRedirectUri
+  }
+
   private initOAuth(): void {
     if (FEATURE_FLAGS.USE_EDGE_AUTH) {
       if (!this.userEmail) {
@@ -328,7 +344,7 @@ export class SdkBridge {
       this.oauth = new EdgeOAuthMethod(
         BROKER_CONFIG.apiUrl,
         BROKER_CONFIG.clientId,
-        BROKER_CONFIG.redirectUri,
+        this.oauthRedirectUri,
         BROKER_CONFIG.scope,
         this.userEmail,
         undefined,
@@ -340,7 +356,7 @@ export class SdkBridge {
     this.oauth = new OAuthMethod(
       BROKER_CONFIG.apiUrl,
       BROKER_CONFIG.clientId,
-      BROKER_CONFIG.redirectUri,
+      this.oauthRedirectUri,
       BROKER_CONFIG.scope,
       BROKER_CONFIG.clientSecret,
       undefined,
@@ -363,6 +379,9 @@ export class SdkBridge {
     try {
       const u = new URL(url)
       u.searchParams.set('prompt', 'login')
+      try {
+        u.searchParams.set('state', new URL(this.oauthRedirectUri).origin)
+      } catch { /* ignore */ }
       authUrl = u.toString()
     } catch {
       /* mantém a URL original se não for parseável */
@@ -403,7 +422,7 @@ export class SdkBridge {
     console.log('[EXCHANGE] codeVerifier disponível:', !!codeVerifier)
     console.log('[EXCHANGE] codeVerifier preview:', codeVerifier?.slice(0, 20) + '...')
     console.log('[EXCHANGE] clientId:', BROKER_CONFIG.clientId)
-    console.log('[EXCHANGE] redirectUri:', BROKER_CONFIG.redirectUri)
+    console.log('[EXCHANGE] redirectUri:', this.oauthRedirectUri)
     console.log('[EXCHANGE] USE_EDGE_AUTH:', FEATURE_FLAGS.USE_EDGE_AUTH)
     console.log('[EXCHANGE] this.oauth inicializado:', !!this.oauth)
 

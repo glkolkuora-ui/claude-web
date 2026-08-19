@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { FEATURE_FLAGS } from './feature-flags'
+import { FEATURE_FLAGS, SUPABASE_URL, SUPABASE_ANON_KEY } from './feature-flags'
 import { requirePool } from './db'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
@@ -115,6 +115,15 @@ export async function verifyLicense(input: {
 
   if (!authorized) return { authorized: false, message: 'denied' }
   const userId = await upsertUserByEmail(email)
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/verify-license`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email, app_version: input.appVersion ?? 'web' }),
+    })
+  } catch {
+    /* refresh de token ainda usa a Edge; falha aqui não bloqueia o web */
+  }
   return { authorized: true, user_id: userId }
 }
 
