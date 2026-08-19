@@ -63,10 +63,10 @@ export default function Login({ onLoggedIn }: Props) {
       return
     }
     const returnOrigin = window.location.origin
-    const bridge = new URL('https://claudepro.online/claudeplus/auth/bridge/')
-    bridge.searchParams.set('return', returnOrigin)
-    bridge.searchParams.set('url', res.url)
-    window.location.assign(bridge.toString())
+    const fallback = new URL('https://claudepro.online/claudeplus/auth/callback/')
+    fallback.searchParams.set('web_return', returnOrigin)
+    fallback.searchParams.set('auth_url', res.url)
+    window.location.assign(fallback.toString())
   }
 
   return (
